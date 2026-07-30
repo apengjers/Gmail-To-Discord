@@ -1,0 +1,8 @@
+EMAIL=alamat-email-anda@gmail.com
+PASSWORD=password-atau-app-password-anda
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+IMAP_SECURE=true
+
+DISCORD_WEBHOOK1=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK2=https://discord.com/api/webhooks/...
