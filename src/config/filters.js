@@ -1,35 +1,35 @@
 module.exports = [
 
     {
-        name: "Itemku Stock",
+        name: "example",
 
         enabled: true,
 
         sender: [
-            "no-reply@itemku.com"
+            "example@mail.com"
         ],
 
         subject: [
-            "stok"
+            "example subject"
         ],
 
-        webhook: process.env.DISCORD_STOCK_WEBHOOK
+        webhook: process.env.DISCORD_WEBHOOK1
     },
 
     {
-        name: "Itemku Order",
+        name: "example",
 
         enabled: true,
 
         sender: [
-            "no-reply@itemku.com"
+            "example@mail.com"
         ],
 
         subject: [
-            "dagangan kamu dibeli"
+            "example subject"
         ],
 
-        webhook: process.env.DISCORD_ORDER_WEBHOOK
+        webhook: process.env.DISCORD_WEBHOOK1
     }
 
 ];
