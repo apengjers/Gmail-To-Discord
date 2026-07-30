@@ -14,6 +14,7 @@ Project ini membaca email dari akun IMAP (misalnya Gmail) lalu meneruskan email 
 ## Instalasi Manual (Windows / Linux)
 1. Clone repository:
    ```bash
+   pkg install git
    git clone https://your-repo-url.git
    cd gmailforwarder
    ```
