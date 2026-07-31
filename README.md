@@ -46,9 +46,20 @@ Project ini membaca email dari akun IMAP (misalnya Gmail) lalu meneruskan email 
    npm install
    ```
 5. Buat file `.env` di root project dan isi dengan konfigurasi Anda.
-6. Jalankan bot:
+6. 6.1. Jalankan bot:
    ```bash
    node src/index.js
+   ```
+   Other Option Runnning Termux
+   6.2. use pm2
+   ```bash
+   npm install -g pm2
+   cd ~/DirectoryClone
+   pm2 start src/index.js --name gmailforwarder
+   pm2 list < Periksa Bot Berjalan >
+   pm2 logs gmailforwarder < Periksa Logs Berjalan >
+   pm2 save < save app configuration running > 
+   pm2 delete gmailforwarder < stop and delete running app >
    ```
 
 ## Konfigurasi `.env`
@@ -68,7 +79,6 @@ DISCORD_WEBHOOK2=https://discord.com/api/webhooks/...
 Catatan:
 - Untuk akun Gmail, gunakan `App Password` jika autentikasi dua faktor diaktifkan.
 - Pastikan IMAP sudah diaktifkan pada pengaturan akun email.
-- Jangan upload file `.env` ke repositori karena berisi kredensial sensitif.
 
 ## Mengedit Filter
 Filter dikelola di file `src/config/filters.js`.
