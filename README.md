@@ -46,21 +46,26 @@ Project ini membaca email dari akun IMAP (misalnya Gmail) lalu meneruskan email 
    npm install
    ```
 5. Buat file `.env` di root project dan isi dengan konfigurasi Anda.
-6. 6.1. Jalankan bot:
+6. Jalankan bot di dalam `tmux` supaya tidak ikut mati saat terminal ditutup:
    ```bash
-   node src/index.js
+   npm run guard
    ```
-   Other Option Runnning Termux
-   6.2. use pm2
+   Lihat bagian [Auto Guard](#auto-guard) untuk detail lengkapnya.
+
+### Opsi lain: pm2
+
+Kalau lebih nyaman pakai pm2 daripada supervisor bawaan:
    ```bash
    npm install -g pm2
    cd ~/DirectoryClone
    pm2 start src/index.js --name gmailforwarder
-   pm2 list < Periksa Bot Berjalan >
-   pm2 logs gmailforwarder < Periksa Logs Berjalan >
-   pm2 save < save app configuration running > 
-   pm2 delete gmailforwarder < stop and delete running app >
+   pm2 list              # periksa bot berjalan
+   pm2 logs gmailforwarder  # periksa log berjalan
+   pm2 save              # simpan konfigurasi running
+   pm2 delete gmailforwarder  # stop dan hapus
    ```
+   Catatan: `pm2 start src/index.js` tidak memakai auto guard supervisor, jadi
+   pastikan `pm2` di-set `restart: true` kalau mau auto restart.
 
 ## Konfigurasi `.env`
 Buat file `.env` di folder root (sama dengan `package.json`) dengan isi contoh berikut:
@@ -72,9 +77,11 @@ IMAP_HOST=imap.gmail.com
 IMAP_PORT=993
 IMAP_SECURE=true
 
-DISCORD_WEBHOOK1=https://discord.com/api/webhooks/...
-DISCORD_WEBHOOK2=https://discord.com/api/webhooks/...
+DISCORD_STOCK_WEBHOOK=https://discord.com/api/webhooks/...
+DISCORD_ORDER_WEBHOOK=https://discord.com/api/webhooks/...
 ```
+
+Nama variabel webhook di atas harus sama dengan yang dipakai di `src/config/filters.js`. Tambah filter berarti tambah variabel webhook baru di `.env`.
 
 Catatan:
 - Untuk akun Gmail, gunakan `App Password` jika autentikasi dua faktor diaktifkan.
@@ -117,15 +124,101 @@ module.exports = [
 - Hanya filter pertama yang cocok akan digunakan.
 
 ## Menjalankan
+
 Setelah `.env` dan filter dikonfigurasi:
 
 ```bash
-node src/index.js
+npm start
 ```
 
-Jika ingin menjalankan di background pada Linux/Termux, gunakan `nohup` atau `tmux`/`screen`.
+## Auto Guard
+
+Bot ini dirancang agar tidak mati diam-diam, terutama di Termux.
+
+### Lapisan 1: Guard di dalam Node (`npm start`)
+
+| Mekanisme | Fungsi |
+|---|---|
+| `uncaughtException` + `unhandledRejection` | Tulis stack trace ke log, lalu `exit(1)` supaya proses di-restart bersih oleh supervisor. |
+| Watchdog NOOP | Tiap 5 menit kirim `NOOP` dengan timeout 30 detik. Kalau gagal, koneksi dianggap mati dan dipaksa reconnect. Ini menangkap socket yang mati diam-diam (mis. ganti WiFi ke data). |
+| Exponential backoff | Reconnect 5s, 10s, 20s, ... maksimal 5 menit. Reset ke 5s setelah berhasil connect. |
+| Graceful shutdown | `SIGINT`/`SIGTERM` akan disconnect IMAP dengan rapi lalu keluar. |
+| Gap guard | Kalau `lastUID` tertinggal > 200 UID, hanya 50 email terakhir yang diproses supaya tidak OOM. |
+| Webhook retry | Maksimal 5 percobaan dengan backoff 2s/4s/8s/16s/32s, lalu skip email itu. Antrean tidak akan macet total. |
+
+### Lapisan 2: Supervisor Termux (`npm run guard`)
+
+Android bisa membunuh proses node kapan saja (low memory killer, battery saver, atau swipe away dari recent apps). Tidak ada kode Node yang bisa melawan itu, jadi `scripts/termux-run.sh` yang menghidupkan kembali prosesnya.
+
+Fitur:
+- `termux-wake-lock` supaya CPU tidak tidur.
+- Loop restart otomatis bila node keluar.
+- Crash brake: keluar 5x dalam 5 menit → tunggu 5 menit (biasanya artinya `.env` salah).
+- PID file di `storage/logs/supervisor.pid`.
+- Output node ditulis ke `storage/logs/supervisor.log`.
+
+### Setup Termux
+
+```bash
+pkg update && pkg upgrade
+pkg install nodejs-lts termux-api
+npm install
+```
+
+Lalu jalankan di dalam `tmux` supaya tidak ikut mati saat terminal ditutup:
+
+```bash
+pkg install tmux
+tmux new -s gmailforwarder
+npm run guard
+```
+
+Detach: `Ctrl+B` lalu `D`. Reattach: `tmux attach -t gmailforwarder`.
+
+### Supaya tidak dibunuh Android
+
+1. Jalankan `termux-wake-lock` (sudah otomatis dipakai oleh supervisor).
+2. Settings Android → Apps → Termux → Battery → **Unrestricted**.
+3. Matikan "Remove from recents" untuk Termux, atau jangan swipe Termux dari recent apps.
+4. Opsional, agar jalan lagi setelah HP restart, install **Termux:Boot** lalu buat `~/.termux/boot/start-gmailforwarder.sh`:
+   ```bash
+   #!/data/data/com.termux/files/usr/bin/bash
+   cd ~/gmailforwarder
+   termux-wake-lock
+   bash scripts/termux-run.sh
+   ```
+
+### Membaca log
+
+```bash
+tail -f storage/logs/bot.log          # log utama (rotasi 5MB x 3)
+tail -f storage/logs/supervisor.log   # log supervisor + output node
+```
+
+Kalau sering muncul `Watchdog heartbeat failed`, berarti koneksi sering putus. Naikkan timeout-nya lewat `.env`:
+
+```env
+WATCHDOG_INTERVAL=300000
+WATCHDOG_TIMEOUT=60000
+```
+
+### Konfigurasi tambahan (opsional, lewat `.env`)
+
+```env
+RECONNECT_BASE_DELAY=5000
+RECONNECT_MAX_DELAY=300000
+MAX_UID_GAP=200
+CATCHUP_COUNT=50
+WEBHOOK_MAX_ATTEMPTS=5
+WEBHOOK_BASE_DELAY=2000
+LOG_LEVEL=info
+```
 
 ## Troubleshooting
-- Jika gagal terkoneksi dengan IMAP, periksa kembali `EMAIL`, `PASSWORD`, `IMAP_HOST`, `IMAP_PORT`, dan `IMAP_SECURE`.
+
+- **Sering mati sendiri** — pastikan dijalankan lewat `npm run guard`, bukan `node src/index.js` langsung. Dan pastikan battery Termux di-set ke Unrestricted.
+- **Muncul `Backlog detected` di log** — `storage/state.json` tertinggal jauh. Bot sengaja hanya mengambil 50 email terakhir supaya tidak OOM. Kalau mau email lama ikut diproses, naikkan `MAX_UID_GAP`.
+- **Proses restart terus-menerus** — cek `storage/logs/bot.log`. Kalau crash brake aktif, hampir pasti karena `.env` salah atau password app salah.
+- **Jika gagal terkoneksi dengan IMAP**, periksa kembali `EMAIL`, `PASSWORD`, `IMAP_HOST`, `IMAP_PORT`, dan `IMAP_SECURE`.
 - Pastikan akun email mendukung akses IMAP.
 - Pastikan URL webhook Discord valid.

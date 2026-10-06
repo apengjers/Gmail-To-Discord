@@ -1,6 +1,15 @@
 const { ImapFlow } = require("imapflow");
+const { logger } = require("../services/logger");
 
 let client = null;
+
+function num(value, fallback) {
+
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : fallback;
+
+}
 
 async function connect() {
 
@@ -9,7 +18,7 @@ async function connect() {
 
     client = new ImapFlow({
         host: process.env.IMAP_HOST,
-        port: Number(process.env.IMAP_PORT),
+        port: num(process.env.IMAP_PORT, 993),
         secure: process.env.IMAP_SECURE === "true",
 
         auth: {
@@ -17,22 +26,45 @@ async function connect() {
             pass: process.env.PASSWORD
         },
 
-        logger: false
+        connectTimeout: num(process.env.IMAP_CONNECT_TIMEOUT, 90000),
+        greetingTimeout: num(process.env.IMAP_GREETING_TIMEOUT, 16000),
+        socketTimeout: num(process.env.IMAP_SOCKET_TIMEOUT, 300000),
+
+        logger: false,
+
+        emitLogs: true
+    });
+
+    client.on("log", entry => {
+
+        if (!entry?.msg)
+            return;
+
+        const payload = {
+            msg: entry.msg,
+            cid: entry.cid
+        };
+
+        if (entry.err)
+            payload.err = entry.err.stack || entry.err.message || entry.err;
+
+        logger.debug(`[IMAP:${entry.cid}] ${entry.msg}`, payload);
+
     });
 
     client.on("error", err => {
-        console.error("[IMAP]", err.message);
+        logger.error(`[IMAP] ${err?.message || err}`, { stack: err?.stack });
     });
 
     client.on("close", () => {
-        console.log("[IMAP] Connection closed");
+        logger.warn("[IMAP] Connection closed");
     });
 
     await client.connect();
 
     await client.mailboxOpen("INBOX");
 
-    console.log("✅ Connected to Gmail");
+    logger.info("Connected to Gmail");
 
     return client;
 
@@ -42,21 +74,40 @@ function getClient() {
     return client;
 }
 
-async function disconnect() {
+function isUsable() {
+    return Boolean(client?.usable);
+}
+
+function closeClient() {
 
     if (!client)
         return;
 
     try {
-        await client.logout();
+        client.close();
     } catch {}
 
+}
+
+async function disconnect() {
+
+    if (!client)
+        return;
+
+    const current = client;
+
     client = null;
+
+    try {
+        await current.logout();
+    } catch {}
 
 }
 
 module.exports = {
     connect,
     disconnect,
-    getClient
+    closeClient,
+    getClient,
+    isUsable
 };

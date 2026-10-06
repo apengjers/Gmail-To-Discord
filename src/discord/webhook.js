@@ -1,8 +1,26 @@
 const axios = require("axios");
+const { logger, sleep } = require("../services/logger");
 
-function sleep(ms) {
+const MAX_ATTEMPTS = Number(process.env.WEBHOOK_MAX_ATTEMPTS || 5);
+const BASE_DELAY = Number(process.env.WEBHOOK_BASE_DELAY || 2000);
+const TIMEOUT = Number(process.env.WEBHOOK_TIMEOUT || 10000);
 
-    return new Promise(resolve => setTimeout(resolve, ms));
+const RETRYABLE = [
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ECONNABORTED",
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "ECONNREFUSED",
+    "EPIPE"
+];
+
+function isRetryable(err) {
+
+    if (err.response?.status === 429)
+        return true;
+
+    return RETRYABLE.includes(err.code);
 
 }
 
@@ -11,11 +29,11 @@ async function sendWebhook(url, payload) {
     if (!url)
         throw new Error("Webhook URL is empty.");
 
-    while (true) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 
         try {
 
-            console.log("[WEBHOOK] Sending...");
+            logger.info("Sending webhook...");
 
             const response = await axios.post(url, payload, {
 
@@ -23,52 +41,56 @@ async function sendWebhook(url, payload) {
                     "Content-Type": "application/json"
                 },
 
-                timeout: 10000
+                timeout: TIMEOUT
 
             });
 
-            console.log("[WEBHOOK] Success:", response.status);
+            logger.info(`Webhook success: ${response.status}`);
 
             return response.data;
 
         } catch (err) {
 
-            const status = err.response?.status;
+            if (attempt >= MAX_ATTEMPTS) {
 
-            // Discord Rate Limit
-            if (status === 429) {
-
-                const retryAfter =
-                    Number(err.response.data?.retry_after ?? 1);
-
-                console.warn(
-                    `[WEBHOOK] Rate limited. Retrying in ${retryAfter}s...`
+                logger.error(
+                    `Webhook failed after ${MAX_ATTEMPTS} attempts, skipping`,
+                    { stack: err?.stack }
                 );
 
-                await sleep((retryAfter * 1000) + 100);
-
-                continue;
+                throw err;
 
             }
 
-            // Network Error
-            if (
-                err.code === "ECONNRESET" ||
-                err.code === "ETIMEDOUT" ||
-                err.code === "ECONNABORTED"
-            ) {
+            if (!isRetryable(err)) {
 
-                console.warn(
-                    `[WEBHOOK] ${err.code}, retrying in 2 seconds...`
+                logger.error(
+                    `Webhook failed permanently: ${err.message}`,
+                    { stack: err?.stack }
                 );
 
-                await sleep(2000);
-
-                continue;
+                throw err;
 
             }
 
-            throw err;
+            let delay = BASE_DELAY * Math.pow(2, attempt - 1);
+
+            if (err.response?.status === 429) {
+
+                const retryAfter = Number(
+                    err.response.data?.retry_after ?? 1
+                );
+
+                delay = Math.max(delay, (retryAfter * 1000) + 100);
+
+            }
+
+            logger.warn(
+                `Webhook attempt ${attempt}/${MAX_ATTEMPTS} failed ` +
+                `(${err.code || err.message}), retrying in ${Math.round(delay / 1000)}s`
+            );
+
+            await sleep(delay);
 
         }
 

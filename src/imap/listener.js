@@ -1,14 +1,15 @@
 const queue = require("./queue");
+const { logger } = require("../services/logger");
 
 async function startListener(client) {
 
-    console.log("📨 Initial sync...");
+    logger.info("Initial sync...");
 
     await queue.sync();
 
     client.on("exists", async () => {
 
-        console.log("[LISTENER] New mail detected");
+        logger.info("New mail detected");
 
         try {
 
@@ -16,13 +17,13 @@ async function startListener(client) {
 
         } catch (err) {
 
-            console.error("[LISTENER]", err);
+            logger.error("Listener sync failed", { stack: err?.stack });
 
         }
 
     });
 
-    console.log("📨 Listener started");
+    logger.info("Listener started");
 
 }
 

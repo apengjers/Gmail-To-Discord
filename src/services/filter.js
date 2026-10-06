@@ -1,4 +1,5 @@
-const filters = require("../config/filters");
+const filters = require("./config/filters");
+const { logger } = require("./logger");
 
 function normalize(value) {
 
@@ -36,21 +37,24 @@ function match(value, keywords) {
 
 function matchFilter(mail) {
 
-    console.log("MAIL FROM   :", normalize(mail.from));
-    console.log("MAIL SUBJECT:", normalize(mail.subject));
+    const from = normalize(mail.from);
+    const subject = normalize(mail.subject);
 
     for (const filter of filters) {
 
-        console.log("\nFilter:", filter.name);
-        console.log("Sender :", match(mail.from, filter.sender));
-        console.log("Subject:", match(mail.subject, filter.subject));
+        const senderMatch = match(mail.from, filter.sender);
+        const subjectMatch = match(mail.subject, filter.subject);
 
-        if (
-            match(mail.from, filter.sender) &&
-            match(mail.subject, filter.subject)
-        ) {
+        if (senderMatch && subjectMatch) {
+
             return filter;
+
         }
+
+        logger.debug(
+            `Filter "${filter.name}" skipped ` +
+            `(sender=${senderMatch}, subject=${subjectMatch})`
+        );
 
     }
 
