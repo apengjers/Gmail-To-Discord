@@ -46,26 +46,21 @@ Project ini membaca email dari akun IMAP (misalnya Gmail) lalu meneruskan email 
    npm install
    ```
 5. Buat file `.env` di root project dan isi dengan konfigurasi Anda.
-6. Jalankan bot di dalam `tmux` supaya tidak ikut mati saat terminal ditutup:
+6. 6.1. Jalankan bot:
    ```bash
-   npm run guard
+   node src/index.js
    ```
-   Lihat bagian [Auto Guard](#auto-guard) untuk detail lengkapnya.
-
-### Opsi lain: pm2
-
-Kalau lebih nyaman pakai pm2 daripada supervisor bawaan:
+   Other Option Runnning Termux
+   6.2. use pm2
    ```bash
    npm install -g pm2
    cd ~/DirectoryClone
    pm2 start src/index.js --name gmailforwarder
-   pm2 list              # periksa bot berjalan
-   pm2 logs gmailforwarder  # periksa log berjalan
-   pm2 save              # simpan konfigurasi running
-   pm2 delete gmailforwarder  # stop dan hapus
+   pm2 list < Periksa Bot Berjalan >
+   pm2 logs gmailforwarder < Periksa Logs Berjalan >
+   pm2 save < save app configuration running > 
+   pm2 delete gmailforwarder < stop and delete running app >
    ```
-   Catatan: `pm2 start src/index.js` tidak memakai auto guard supervisor, jadi
-   pastikan `pm2` di-set `restart: true` kalau mau auto restart.
 
 ## Konfigurasi `.env`
 Buat file `.env` di folder root (sama dengan `package.json`) dengan isi contoh berikut:
@@ -86,6 +81,7 @@ Nama variabel webhook di atas harus sama dengan yang dipakai di `src/config/filt
 Catatan:
 - Untuk akun Gmail, gunakan `App Password` jika autentikasi dua faktor diaktifkan.
 - Pastikan IMAP sudah diaktifkan pada pengaturan akun email.
+- Jangan upload file `.env` ke repositori karena berisi kredensial sensitif.
 
 ## Mengedit Filter
 Filter dikelola di file `src/config/filters.js`.
