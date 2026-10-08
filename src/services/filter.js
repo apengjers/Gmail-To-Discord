@@ -1,4 +1,4 @@
-const filters = require("./config/filters");
+const filters = require("../config/filters");
 const { logger } = require("./logger");
 
 function normalize(value) {
